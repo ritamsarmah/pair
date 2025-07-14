@@ -12,11 +12,15 @@ const BASE_URL: &str =
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 fn main() -> Result<()> {
-    let instructions = env::args().skip(1).collect::<Vec<_>>().join(" ");
+    let mut instructions = env::args()
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_owned();
 
     if instructions.is_empty() {
-        eprintln!("Usage: pair INSTRUCTIONS");
-        exit(1);
+        instructions = "Finish the implementation and output the complete code".into();
     }
 
     let mut input = String::new();
