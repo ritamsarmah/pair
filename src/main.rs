@@ -7,17 +7,12 @@ use std::{
     process::exit,
 };
 
-const SYSTEM_PROMPT: &str = "You are an expert pair programmer. Follow provided instructions and output minimal raw code, without any Markdown formatting (no code fence backticks) or HTML tags. Keep any comments and style.";
+const SYSTEM_PROMPT: &str = "You are an expert pair programmer. Follow provided instructions and output minimal, idiomatic, raw code, without any Markdown formatting (no code fence backticks) or HTML tags. Keep any comments and style.";
 const BASE_URL: &str =
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 fn main() -> Result<()> {
-    let instructions = env::args()
-        .skip(1)
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_owned();
+    let instructions = env::args().skip(1).collect::<Vec<_>>().join(" ");
 
     if instructions.is_empty() {
         eprintln!("Usage: pair INSTRUCTIONS");
@@ -27,26 +22,16 @@ fn main() -> Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
-    let contents = if input.is_empty() {
-        // No input from user, just follow instructions
-        format!("Instructions: {instructions}")
-    } else {
-        // Combine instructions and additional input
-        format!("Instructions: {instructions}\nInput: {}", input.trim())
-    };
+    let contents = format!(
+        "Instructions: {}\nInput: {}",
+        instructions.trim(),
+        input.trim()
+    );
 
     let body = json!({
-        "system_instruction": {
-            "parts": [{ "text": SYSTEM_PROMPT }]
-        },
-        "contents": [{
-            "parts": [{ "text": contents }]
-        }],
-        "generationConfig": {
-            "thinkingConfig": {
-                "thinkingBudget": 0
-            }
-        }
+        "system_instruction": { "parts": [{ "text": SYSTEM_PROMPT }] },
+        "contents": [{ "parts": [{ "text": contents }] }],
+        "generationConfig": { "thinkingConfig": { "thinkingBudget": 0 } }
     });
 
     let api_key = env::var("GEMINI_API_KEY")?;
@@ -60,11 +45,7 @@ fn main() -> Result<()> {
         .send()?
         .json()?;
 
-    if let Some(text) = response["candidates"]
-        .get(0)
-        .and_then(|c| c["content"]["parts"].get(0))
-        .and_then(|p| p["text"].as_str())
-    {
+    if let Some(text) = response["candidates"][0]["content"]["parts"][0]["text"].as_str() {
         println!("{text}");
         Ok(())
     } else {
