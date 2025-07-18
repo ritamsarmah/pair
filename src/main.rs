@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use reqwest::header::CONTENT_TYPE;
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::{Value, json};
 use std::{
     env,
@@ -9,8 +9,12 @@ use std::{
 };
 use termimad::{MadSkin, crossterm::style::Color};
 
-const BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
-const MODEL: &str = "gemini-2.5-flash";
+const GEMINI_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_MODEL: &str = "gemini-2.5-flash";
+
+const OPENAI_URL: &str = "https://api.openai.com/v1/responses";
+const OPENAI_MODEL: &str = "gpt-4.1";
+
 const USAGE: &str = "Usage: pair [OPTIONS] <COMMAND> [ARGS]
 
 Commands:
@@ -120,30 +124,50 @@ fn review_code(code: &str) -> Result<()> {
     Ok(())
 }
 
-fn llm_response(prompt: &str, contents: &str) -> Result<String> {
-    let api_key = env::var("GEMINI_API_KEY")?;
-    let body = json!({
-        "system_instruction": { "parts": [{ "text": prompt }] },
-        "contents": [{ "parts": [{ "text": contents }] }],
-        "generationConfig": {
-            "temperature": 0,
-            "thinkingConfig": { "thinkingBudget": 0 }
-        }
-    });
+fn llm_response(prompt: &str, input: &str) -> Result<String> {
+    let output = if let Some(api_key) = env::var("GEMINI_API_KEY").ok() {
+        let body = json!({
+            "system_instruction": { "parts": [{ "text": prompt }] },
+            "contents": [{ "parts": [{ "text": input }] }],
+            "generationConfig": {
+                "temperature": 0,
+                "thinkingConfig": { "thinkingBudget": 0 }
+            }
+        });
 
-    let url = format!("{BASE_URL}/{MODEL}:generateContent");
-    let client = reqwest::blocking::Client::new();
-    let response: Value = client
-        .post(url)
-        .header("x-goog-api-key", api_key)
-        .header(CONTENT_TYPE, "application/json")
-        .json(&body)
-        .send()?
-        .json()?;
+        let url = format!("{GEMINI_URL}/{GEMINI_MODEL}:generateContent");
+        let client = reqwest::blocking::Client::new();
+        let response: Value = client
+            .post(url)
+            .header("x-goog-api-key", api_key)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()?
+            .json()?;
 
-    let text = response["candidates"][0]["content"]["parts"][0]["text"].to_string();
+        response["candidates"][0]["content"]["parts"][0]["text"].to_string()
+    } else if let Some(api_key) = env::var("OPENAI_API_KEY").ok() {
+        let body = json!({
+            "model": OPENAI_MODEL,
+            "instructions": prompt,
+            "input": input
+        });
 
-    Ok(serde_json::from_str(&text)?)
+        let client = reqwest::blocking::Client::new();
+        let response: Value = client
+            .post(OPENAI_URL)
+            .header(CONTENT_TYPE, "application/json")
+            .header(AUTHORIZATION, format!("Bearer {api_key}"))
+            .json(&body)
+            .send()?
+            .json()?;
+
+        response["output"][0]["content"][0]["text"].to_string()
+    } else {
+        bail!("No valid API key found")
+    };
+
+    Ok(serde_json::from_str(&output)?)
 }
 
 fn get_markdown_skin() -> MadSkin {
