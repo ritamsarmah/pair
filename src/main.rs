@@ -40,17 +40,7 @@ fn main() -> Result<()> {
             write_code(&instructions)?
         }
         "-r" | "--review" => {
-            let code = if args.len() == 2 {
-                // No files specified; fetch modified files in version control
-                let output = Command::new("git").arg("diff").output()?.stdout;
-                let diff = String::from_utf8_lossy(&output);
-
-                if diff.is_empty() {
-                    bail!("No code changes found");
-                }
-
-                diff.to_string()
-            } else {
+            let code = if args.len() > 2 {
                 // Review specified files
                 let paths = &args[2..];
                 let mut code = String::new();
@@ -64,6 +54,16 @@ fn main() -> Result<()> {
                 }
 
                 code
+            } else {
+                // No files specified; fetch modified files in version control
+                let output = Command::new("git").arg("diff").output()?.stdout;
+                let diff = String::from_utf8_lossy(&output);
+
+                if diff.is_empty() {
+                    bail!("No code changes found");
+                }
+
+                diff.to_string()
             };
 
             review_code(&code)?
