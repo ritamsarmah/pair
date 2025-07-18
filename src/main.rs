@@ -35,31 +35,26 @@ fn main() -> Result<()> {
     let flag = &args[1];
     match flag.as_ref() {
         "-c" | "--code" => {
-            let instructions = if args.len() > 2 {
-                args[2..].join(" ")
-            } else {
-                "Finish the implementation and output the complete code".to_owned()
-            };
+            let instructions = args.get(2..).map_or_else(
+                || "Finish the implementation and output the complete code".to_owned(),
+                |s| s.join(" "),
+            );
 
             write_code(&instructions)?
         }
         "-r" | "--review" => {
             let code = if args.len() > 2 {
                 // Review specified files
-                let paths = &args[2..];
-                let mut code = String::new();
-
-                for path in paths {
-                    let content = read_to_string(path)
-                        .with_context(|| format!("Failed to read file '{path}'"))?;
-                    code.push_str(&format!("[{path}]"));
-                    code.push_str(&content);
-                    code.push('\n');
-                }
-
-                code
+                args[2..]
+                    .iter()
+                    .map(|path| {
+                        read_to_string(path)
+                            .with_context(|| format!("Failed to read file '{path}'"))
+                            .map(|content| format!("[{path}]\n{content}\n"))
+                    })
+                    .collect::<Result<String>>()?
             } else {
-                // No files specified; fetch modified files in version control
+                // No files specified. Fetch modified files in version control
                 let output = Command::new("git").arg("diff").output()?.stdout;
                 let diff = String::from_utf8_lossy(&output);
 
@@ -117,7 +112,7 @@ fn review_code(code: &str) -> Result<()> {
     - List only real, significant issues. Don't invent issues if none are present.
     - Never wrap the Markdown output with code fence backticks.";
 
-    let response = llm_response(prompt, &code)?;
+    let response = llm_response(prompt, code)?;
     let skin = get_markdown_skin();
     skin.print_text(&response);
 
@@ -125,6 +120,8 @@ fn review_code(code: &str) -> Result<()> {
 }
 
 fn llm_response(prompt: &str, input: &str) -> Result<String> {
+    let client = reqwest::blocking::Client::new();
+
     let output = if let Some(api_key) = env::var("GEMINI_API_KEY").ok() {
         let body = json!({
             "system_instruction": { "parts": [{ "text": prompt }] },
@@ -136,7 +133,6 @@ fn llm_response(prompt: &str, input: &str) -> Result<String> {
         });
 
         let url = format!("{GEMINI_URL}/{GEMINI_MODEL}:generateContent");
-        let client = reqwest::blocking::Client::new();
         let response: Value = client
             .post(url)
             .header("x-goog-api-key", api_key)
@@ -153,7 +149,6 @@ fn llm_response(prompt: &str, input: &str) -> Result<String> {
             "input": input
         });
 
-        let client = reqwest::blocking::Client::new();
         let response: Value = client
             .post(OPENAI_URL)
             .header(CONTENT_TYPE, "application/json")
