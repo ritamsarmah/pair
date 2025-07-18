@@ -11,12 +11,14 @@ use termimad::{MadSkin, crossterm::style::Color};
 
 const BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL: &str = "gemini-2.5-flash";
-const USAGE: &str = "Usage: pair <flag> [args]
+const USAGE: &str = "Usage: pair [OPTIONS] <COMMAND> [ARGS]
 
-Flags:
-  -c, --code    Output code based on instructions
-  -r, --review  Review specified or modified files
-  -h, --help    Show this help message and exit";
+Commands:
+  -c, --code <PROMPT>       Output code based on instructions
+  -r, --review [<FILES>...] Review specified or modified files
+
+Options:
+  -h, --help                Show this help message and exit";
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
