@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use reqwest::header::CONTENT_TYPE;
 use serde_json::{Value, json};
 use std::{
@@ -56,7 +56,9 @@ fn main() -> Result<()> {
                 let mut code = String::new();
 
                 for path in paths {
-                    let content = read_to_string(path)?;
+                    let content = read_to_string(path)
+                        .with_context(|| format!("Failed to read file '{path}'"))?;
+                    code.push_str(&format!("[{path}]"));
                     code.push_str(&content);
                     code.push('\n');
                 }
