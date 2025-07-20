@@ -108,7 +108,7 @@ Identify a list of suggestions in the following categories:
 4. Security (vulnerabilities, injections, unsafe practices)
 
 Suggestion Format:
-## (Category) Title
+## **Category** - Title
 
 Concise Description
 
