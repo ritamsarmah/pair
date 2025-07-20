@@ -55,7 +55,10 @@ fn main() -> Result<()> {
                     .collect::<Result<String>>()?
             } else {
                 // No files specified. Fetch modified files in version control
-                let output = Command::new("git").arg("diff").output()?.stdout;
+                let output = Command::new("git")
+                    .args(["diff", "--text"])
+                    .output()?
+                    .stdout;
                 let diff = String::from_utf8_lossy(&output);
 
                 if diff.is_empty() {
@@ -77,8 +80,8 @@ fn main() -> Result<()> {
 /// Writes code based on instructions to stdout.
 fn write_code(instructions: &str) -> Result<()> {
     let prompt = "You are an expert programmer.
-    Follow provided instructions and output minimal, idiomatic, raw code, without any Markdown formatting (no code fence backticks) or HTML tags.
-    Keep any comments and style.";
+Follow provided instructions and output minimal, idiomatic, raw code, without any Markdown formatting (no code fence backticks) or HTML tags.
+Keep any comments and style.";
 
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
@@ -98,19 +101,31 @@ fn write_code(instructions: &str) -> Result<()> {
 /// Reviews code for bugs and issues.
 fn review_code(code: &str) -> Result<()> {
     let prompt = "You are a senior software engineer performing a professional code review.
-    Analyze the code step-by-step and return only real issues. Never give compliments or stylistic opinions.
+Identify a list of suggestions in the following categories:
+1. Bug (logic errors, incorrect assumptions, edge cases)
+2. Performance (slow paths, unnecessary allocations, poor complexity)
+3. Maintainability (readability, clarity, duplication, structure)
+4. Security (vulnerabilities, injections, unsafe practices)
 
-    Focus on the following categories:
-    1. Bugs (logic errors, incorrect assumptions, edge cases)
-    2. Performance (slow paths, unnecessary allocations, poor complexity)
-    3. Maintainability (readability, clarity, duplication, structure)
-    4. Security (vulnerabilities, injections, unsafe practices)
+Suggestion Format:
+## (Category) Title
 
-    Output:
-    - Always use Markdown, with an h2 header for each section.
-    - Be concise, but specific. No vague or generic comments.
-    - List only real, significant issues. Don't invent issues if none are present.
-    - Never wrap the Markdown output with code fence backticks.";
+Concise Description
+
+```
+Original Code
+```
+
+```
+Fixed Code (only if needed)
+```
+
+Output:
+- Always use Markdown.
+- List only real and significant issues. Don't invent issues if none are present.
+- Never give compliments or stylistic opinions.
+- Be concise, but specific. No vague or generic comments.
+- Never wrap the Markdown output with code fence backticks.";
 
     let response = llm_response(prompt, code)?;
     let skin = get_markdown_skin();
