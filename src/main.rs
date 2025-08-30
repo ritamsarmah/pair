@@ -9,11 +9,7 @@ use std::{
 };
 use termimad::{MadSkin, crossterm::style::Color};
 
-const GEMINI_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
-const GEMINI_MODEL: &str = "gemini-2.5-flash";
-
-const OPENAI_URL: &str = "https://api.openai.com/v1/responses";
-const OPENAI_MODEL: &str = "gpt-4.1";
+const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/completions";
 
 const USAGE: &str = "Usage: pair [OPTIONS] <COMMAND> [ARGS]
 
@@ -24,7 +20,8 @@ Commands:
 Options:
   -h, --help                Show this help message and exit";
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
@@ -40,7 +37,7 @@ fn main() -> Result<()> {
                 |s| s.join(" "),
             );
 
-            write_code(&instructions)?
+            write_code(&instructions).await?
         }
         "-r" | "--review" => {
             let code = if args.len() > 2 {
@@ -68,7 +65,7 @@ fn main() -> Result<()> {
                 diff.to_string()
             };
 
-            review_code(&code)?
+            review_code(&code).await?
         }
         "-h" | "--help" => println!("{USAGE}"),
         _ => bail!("Unrecognized flag: {}", flag),
@@ -78,106 +75,52 @@ fn main() -> Result<()> {
 }
 
 /// Writes code based on instructions to stdout.
-fn write_code(instructions: &str) -> Result<()> {
-    let prompt = "You are an expert programmer.
-Follow provided instructions and output minimal, idiomatic, raw code, without any Markdown formatting (no code fence backticks) or HTML tags.
-Keep any comments and style.";
-
+async fn write_code(instructions: &str) -> Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
-    let contents = format!(
+    let prompt = format!(
         "Instructions: {}\nInput: {}",
         instructions.trim(),
         input.trim()
     );
 
-    let response = llm_response(prompt, &contents)?;
+    let response = llm_response("@preset/write-code", &prompt).await?;
     println!("{response}");
 
     Ok(())
 }
 
 /// Reviews code for bugs and issues.
-fn review_code(code: &str) -> Result<()> {
-    let prompt = "You are a senior software engineer performing a professional code review.
-Identify a list of suggestions in the following categories:
-1. Bug (logic errors, incorrect assumptions, edge cases)
-2. Performance (slow paths, unnecessary allocations, poor complexity)
-3. Maintainability (readability, clarity, duplication, structure)
-4. Security (vulnerabilities, injections, unsafe practices)
-
-Suggestion Format:
-## **Category** - Title
-
-Concise Description
-
-```
-Original Code
-```
-
-```
-Fixed Code (only if needed)
-```
-
-Output:
-- Always use Markdown.
-- List only real and significant issues. Don't invent issues if none are present.
-- Never give compliments or stylistic opinions.
-- Be concise, but specific. No vague or generic comments.
-- Never wrap the Markdown output with code fence backticks.";
-
-    let response = llm_response(prompt, code)?;
+async fn review_code(code: &str) -> Result<()> {
+    let response = llm_response("@preset/review-code", code).await?;
     let skin = get_markdown_skin();
     skin.print_text(&response);
 
     Ok(())
 }
 
-fn llm_response(prompt: &str, input: &str) -> Result<String> {
-    let client = reqwest::blocking::Client::new();
+async fn llm_response(preset: &str, prompt: &str) -> Result<String> {
+    let api_key = env::var("OPENROUTER_API_KEY").context("No valid OpenRouter API key found")?;
+    let client = reqwest::Client::new();
 
-    let output = if let Some(api_key) = env::var("GEMINI_API_KEY").ok() {
-        let body = json!({
-            "system_instruction": { "parts": [{ "text": prompt }] },
-            "contents": [{ "parts": [{ "text": input }] }],
-            "generationConfig": {
-                "temperature": 0,
-                "thinkingConfig": { "thinkingBudget": 0 }
-            }
-        });
+    let body = json!({
+        "model": preset,
+        "prompt": prompt
+    });
 
-        let url = format!("{GEMINI_URL}/{GEMINI_MODEL}:generateContent");
-        let response: Value = client
-            .post(url)
-            .header("x-goog-api-key", api_key)
-            .header(CONTENT_TYPE, "application/json")
-            .json(&body)
-            .send()?
-            .json()?;
+    let request = client
+        .post(OPENROUTER_URL)
+        .header(CONTENT_TYPE, "application/json")
+        .header(AUTHORIZATION, format!("Bearer {api_key}"))
+        .json(&body);
 
-        response["candidates"][0]["content"]["parts"][0]["text"].to_string()
-    } else if let Some(api_key) = env::var("OPENAI_API_KEY").ok() {
-        let body = json!({
-            "model": OPENAI_MODEL,
-            "instructions": prompt,
-            "input": input
-        });
+    let response: Value = request.send().await?.json().await?;
+    let output = response["choices"][0]["text"]
+        .as_str()
+        .context("Invalid response format")?;
 
-        let response: Value = client
-            .post(OPENAI_URL)
-            .header(CONTENT_TYPE, "application/json")
-            .header(AUTHORIZATION, format!("Bearer {api_key}"))
-            .json(&body)
-            .send()?
-            .json()?;
-
-        response["output"][0]["content"][0]["text"].to_string()
-    } else {
-        bail!("No valid API key found")
-    };
-
-    Ok(serde_json::from_str(&output)?)
+    Ok(output.to_string())
 }
 
 fn get_markdown_skin() -> MadSkin {
