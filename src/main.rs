@@ -116,6 +116,14 @@ async fn llm_response(preset: &str, prompt: &str) -> Result<String> {
         .json(&body);
 
     let response: Value = request.send().await?.json().await?;
+
+    if let Some(error) = response.get("error") {
+        let message = error
+            .get("message")
+            .map_or("Unknown OpenRouter error".to_owned(), |m| m.to_string());
+        bail!(message);
+    }
+
     let output = response["choices"][0]["text"]
         .as_str()
         .context("Invalid response format")?;
