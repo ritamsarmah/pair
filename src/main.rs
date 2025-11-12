@@ -96,7 +96,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Writes code based on instructions to stdout.
+/// Write code based on instructions to stdout.
 fn write_code(instructions: &str) -> Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
@@ -113,14 +113,15 @@ fn write_code(instructions: &str) -> Result<()> {
     Ok(())
 }
 
-/// Reviews code for bugs and issues.
+/// Review code for bugs and issues.
 fn review_code(code: &str) -> Result<()> {
     let response = llm_response("@preset/review-code", code)?;
-    print_markdown(&response);
+    println!("{response}");
 
     Ok(())
 }
 
+/// Retrieve LLM response using OpenRouter API.
 fn llm_response(preset: &str, prompt: &str) -> Result<String> {
     let api_key = env::var("OPENROUTER_API_KEY").context("No valid OpenRouter API key found")?;
 
@@ -145,8 +146,4 @@ fn llm_response(preset: &str, prompt: &str) -> Result<String> {
     } else {
         bail!("Invalid response format")
     }
-}
-
-fn print_markdown(markdown: &str) {
-    println!("{markdown}");
 }
