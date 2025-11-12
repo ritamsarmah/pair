@@ -1,13 +1,12 @@
 use anyhow::{Context, Result, bail};
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
-use serde_json::{Value, json};
+use nanoserde::{DeJson, SerJson};
 use std::{
+    collections::HashMap,
     env,
     fs::read_to_string,
     io::{self, Read},
     process::{Command, exit},
 };
-use termimad::{MadSkin, crossterm::style::Color};
 
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/completions";
 
@@ -20,8 +19,31 @@ Commands:
 Options:
   -h, --help                Show this help message and exit";
 
-#[tokio::main]
-async fn main() -> Result<()> {
+/* Response */
+
+mod openrouter {
+    use nanoserde::DeJson;
+
+    #[derive(DeJson, Debug)]
+    pub struct Response {
+        pub error: Option<Error>,
+        pub choices: Option<Vec<Choice>>,
+    }
+
+    #[derive(DeJson, Debug)]
+    pub struct Error {
+        pub message: String,
+    }
+
+    #[derive(DeJson, Debug)]
+    pub struct Choice {
+        pub text: String,
+    }
+}
+
+/* Functions */
+
+fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
@@ -37,7 +59,7 @@ async fn main() -> Result<()> {
                 |s| s.join(" "),
             );
 
-            write_code(&instructions).await?
+            write_code(&instructions)?
         }
         "-r" | "--review" => {
             let code = if args.len() > 2 {
@@ -65,7 +87,7 @@ async fn main() -> Result<()> {
                 diff.to_string()
             };
 
-            review_code(&code).await?
+            review_code(&code)?
         }
         "-h" | "--help" => println!("{USAGE}"),
         _ => bail!("Unrecognized flag: {}", flag),
@@ -75,7 +97,7 @@ async fn main() -> Result<()> {
 }
 
 /// Writes code based on instructions to stdout.
-async fn write_code(instructions: &str) -> Result<()> {
+fn write_code(instructions: &str) -> Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
@@ -85,59 +107,46 @@ async fn write_code(instructions: &str) -> Result<()> {
         input.trim()
     );
 
-    let response = llm_response("@preset/write-code", &prompt).await?;
+    let response = llm_response("@preset/write-code", &prompt)?;
     println!("{response}");
 
     Ok(())
 }
 
 /// Reviews code for bugs and issues.
-async fn review_code(code: &str) -> Result<()> {
-    let response = llm_response("@preset/review-code", code).await?;
-    let skin = get_markdown_skin();
-    skin.print_text(&response);
+fn review_code(code: &str) -> Result<()> {
+    let response = llm_response("@preset/review-code", code)?;
+    print_markdown(&response);
 
     Ok(())
 }
 
-async fn llm_response(preset: &str, prompt: &str) -> Result<String> {
+fn llm_response(preset: &str, prompt: &str) -> Result<String> {
     let api_key = env::var("OPENROUTER_API_KEY").context("No valid OpenRouter API key found")?;
-    let client = reqwest::Client::new();
 
-    let body = json!({
-        "model": preset,
-        "prompt": prompt
-    });
+    let mut body = HashMap::<String, String>::new();
+    body.insert("model".into(), preset.into());
+    body.insert("prompt".into(), prompt.into());
 
-    let request = client
-        .post(OPENROUTER_URL)
-        .header(CONTENT_TYPE, "application/json")
-        .header(AUTHORIZATION, format!("Bearer {api_key}"))
-        .json(&body);
+    let response = ureq::post(OPENROUTER_URL)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {api_key}"))
+        .send(body.serialize_json())?;
 
-    let response: Value = request.send().await?.json().await?;
+    let text = response.into_body().read_to_string()?;
+    let response = openrouter::Response::deserialize_json(&text)?;
 
-    if let Some(error) = response.get("error") {
-        let message = error
-            .get("message")
-            .map_or("Unknown OpenRouter error".to_owned(), |m| m.to_string());
-        bail!(message);
+    if let Some(error) = response.error {
+        bail!(error.message);
     }
 
-    let output = response["choices"][0]["text"]
-        .as_str()
-        .context("Invalid response format")?;
-
-    Ok(output.to_string())
+    if let Some(choices) = response.choices {
+        Ok(choices[0].text.clone())
+    } else {
+        bail!("Invalid response format")
+    }
 }
 
-fn get_markdown_skin() -> MadSkin {
-    let mut skin = MadSkin::default();
-    skin.set_fg(Color::Reset);
-    skin.set_bg(Color::Reset);
-    skin.inline_code.set_fg(Color::White);
-    skin.inline_code.set_bg(Color::Black);
-    skin.code_block.set_fg(Color::Reset);
-    skin.code_block.set_bg(Color::Reset);
-    skin
+fn print_markdown(markdown: &str) {
+    println!("{markdown}");
 }
