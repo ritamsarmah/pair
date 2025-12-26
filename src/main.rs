@@ -53,6 +53,13 @@ fn main() -> Result<()> {
 
     let flag = &args[1];
     match flag.as_ref() {
+        "-a" | "--ask" => {
+            if let Some(query) = args.get(2..).filter(|q| !q.is_empty()) {
+                ask(&query.join(" "))?
+            } else {
+                bail!("No query provided")
+            }
+        }
         "-c" | "--code" => {
             let instructions = args.get(2..).map_or_else(
                 || "Finish the implementation and output the complete code".to_owned(),
@@ -116,6 +123,14 @@ fn write_code(instructions: &str) -> Result<()> {
 /// Review code for bugs and issues.
 fn review_code(code: &str) -> Result<()> {
     let response = llm_response("@preset/review-code", code)?;
+    println!("{response}");
+
+    Ok(())
+}
+
+/// Generate response for query.
+fn ask(query: &str) -> Result<()> {
+    let response = llm_response("@preset/ask-query", query)?;
     println!("{response}");
 
     Ok(())
