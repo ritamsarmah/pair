@@ -13,6 +13,7 @@ const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/completions";
 const USAGE: &str = "Usage: pair [OPTIONS] <COMMAND> [ARGS]
 
 Commands:
+  -a, --ask <PROMPT>        Answer a general query
   -c, --code <PROMPT>       Output code based on instructions
   -r, --review [<FILES>...] Review specified or modified files
 

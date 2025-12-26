@@ -4,6 +4,12 @@ An AI pair programmer for terminal-based workflows.
 
 ## Features
 
+**Question Answering**
+
+```sh
+pair --ask 'Why is the sky blue'
+```
+
 **Code Completion**
 
 ```sh
@@ -13,7 +19,7 @@ echo 'print("hello' | pair --code
 **Code Completion with Custom Prompt**
 
 ```sh
-echo 'print("hello world")' | pair --code rewrite this code in Rust
+echo 'print("hello world")' | pair --code 'rewrite this code in Rust'
 ```
 
 **Review Local Git Changes**
