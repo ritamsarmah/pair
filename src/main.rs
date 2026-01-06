@@ -10,14 +10,12 @@ use std::{
 
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/completions";
 
-const USAGE: &str = "Usage: pair [OPTIONS] <COMMAND> [ARGS]
+const USAGE: &str = "Usage: pair <COMMAND> [ARGS]
 
 Commands:
   -a, --ask <PROMPT>        Answer a general query
   -c, --code <PROMPT>       Output code based on instructions
   -r, --review [<FILES>...] Review specified or modified files
-
-Options:
   -h, --help                Show this help message and exit";
 
 /* Response */
@@ -48,7 +46,8 @@ fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        bail!(USAGE);
+        println!("{USAGE}");
+        return Ok(());
     }
 
     let flag = &args[1];
