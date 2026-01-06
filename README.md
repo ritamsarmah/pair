@@ -10,16 +10,22 @@ An AI pair programmer for terminal-based workflows.
 pair --ask 'Why is the sky blue'
 ```
 
+**Code Generation**
+
+```sh
+pair --code "Write fibonacci in Rust"
+```
+
+**Code Generation with Input Code**
+
+```sh
+echo 'print("hello world")' | pair --code 'rewrite this code in Rust'
+```
+
 **Code Completion**
 
 ```sh
 echo 'print("hello' | pair --code
-```
-
-**Code Completion with Custom Prompt**
-
-```sh
-echo 'print("hello world")' | pair --code 'rewrite this code in Rust'
 ```
 
 **Review Local Git Changes**

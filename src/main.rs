@@ -4,8 +4,8 @@ use std::{
     collections::HashMap,
     env,
     fs::read_to_string,
-    io::{self, Read},
-    process::{Command, exit},
+    io::{self, IsTerminal, Read},
+    process::Command,
 };
 
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/completions";
@@ -48,93 +48,87 @@ fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        println!("{USAGE}");
-        exit(1);
+        bail!(USAGE);
     }
 
     let flag = &args[1];
-    match flag.as_ref() {
-        "-a" | "--ask" => {
-            if let Some(query) = args.get(2..).filter(|q| !q.is_empty()) {
-                ask(&query.join(" "))?
-            } else {
-                bail!("No query provided")
-            }
-        }
-        "-c" | "--code" => {
-            let instructions = args.get(2..).map_or_else(
-                || "Finish the implementation and output the complete code".to_owned(),
-                |s| s.join(" "),
-            );
+    let input = args.get(2..).unwrap_or(&[]);
 
-            write_code(&instructions)?
-        }
-        "-r" | "--review" => {
-            let code = if args.len() > 2 {
-                // Review specified files
-                args[2..]
-                    .iter()
-                    .map(|path| {
-                        read_to_string(path)
-                            .with_context(|| format!("Failed to read file '{path}'"))
-                            .map(|content| format!("[{path}]\n{content}\n"))
-                    })
-                    .collect::<Result<String>>()?
-            } else {
-                // No files specified. Fetch modified files in version control
-                let output = Command::new("git")
-                    .args(["diff", "--text"])
-                    .output()?
-                    .stdout;
-                let diff = String::from_utf8_lossy(&output);
-
-                if diff.is_empty() {
-                    bail!("No code changes found");
-                }
-
-                diff.to_string()
-            };
-
-            review_code(&code)?
-        }
-        "-h" | "--help" => println!("{USAGE}"),
+    let output = match flag.as_ref() {
+        "-a" | "--ask" => ask(&input.join(" ").trim())?,
+        "-c" | "--code" => write_code(&input.join(" ").trim())?,
+        "-r" | "--review" => review_code(input)?,
+        "-h" | "--help" => USAGE.into(),
         _ => bail!("Unrecognized flag: {}", flag),
-    }
+    };
 
-    Ok(())
-}
-
-/// Write code based on instructions to stdout.
-fn write_code(instructions: &str) -> Result<()> {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input)?;
-
-    let prompt = format!(
-        "Instructions: {}\nInput: {}",
-        instructions.trim(),
-        input.trim()
-    );
-
-    let response = llm_response("@preset/write-code", &prompt)?;
-    println!("{response}");
-
-    Ok(())
-}
-
-/// Review code for bugs and issues.
-fn review_code(code: &str) -> Result<()> {
-    let response = llm_response("@preset/review-code", code)?;
-    println!("{response}");
+    println!("{output}");
 
     Ok(())
 }
 
 /// Generate response for query.
-fn ask(query: &str) -> Result<()> {
-    let response = llm_response("@preset/ask-query", query)?;
-    println!("{response}");
+fn ask(query: &str) -> Result<String> {
+    if query.is_empty() {
+        bail!("No query provided")
+    }
 
-    Ok(())
+    llm_response("@preset/ask-query", query)
+}
+
+/// Write code based on instructions.
+fn write_code(instructions: &str) -> Result<String> {
+    // Read input code from stdin, otherwise using instructions to generate code
+    let mut input = String::new();
+    if !io::stdin().is_terminal() {
+        io::stdin().read_to_string(&mut input)?;
+    }
+
+    let input = input.trim();
+    let instructions = instructions.trim();
+
+    let prompt = match (input.is_empty(), instructions.is_empty()) {
+        (true, true) => bail!("No input code or instructions provided"),
+        (true, false) => instructions.into(),
+        (false, true) => {
+            format!("Finish the implementation and output the complete code:\n{input}")
+        }
+        (false, false) => format!("Instructions:\n{instructions}\n\nInput:\n{input}",),
+    };
+
+    llm_response("@preset/write-code", &prompt)
+}
+
+/// Review code for bugs and issues.
+fn review_code(paths: &[String]) -> Result<String> {
+    let code = if paths.is_empty() {
+        println!("Reviewing changed files under version control\n");
+        let output = Command::new("git").args(["diff", "--text"]).output()?;
+
+        if !output.status.success() {
+            bail!("Failed to fetch git diff")
+        }
+
+        String::from_utf8_lossy(&output.stdout).into()
+    } else {
+        println!("Reviewing {} specified file(s)\n", paths.len());
+
+        paths
+            .iter()
+            .map(|path| {
+                read_to_string(path)
+                    .with_context(|| format!("Failed to read file: {}", path))
+                    .map(|content| format!("[{path}]\n{content}\n"))
+            })
+            .collect::<Result<Vec<String>>>()?
+            .join("\n")
+    };
+
+    if code.trim().is_empty() {
+        bail!("No code changes found");
+    }
+
+    llm_response("@preset/review-code", &code)
 }
 
 /// Retrieve LLM response using OpenRouter API.
