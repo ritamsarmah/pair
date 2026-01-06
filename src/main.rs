@@ -86,13 +86,13 @@ fn write_code(instructions: &str) -> Result<String> {
     let input = input.trim();
     let instructions = instructions.trim();
 
-    let prompt = match (input.is_empty(), instructions.is_empty()) {
-        (true, true) => bail!("No input code or instructions provided"),
-        (true, false) => instructions.into(),
-        (false, true) => {
+    let prompt = match (!input.is_empty(), !instructions.is_empty()) {
+        (true, true) => format!("Instructions:\n{instructions}\n\nInput:\n{input}",),
+        (false, true) => instructions.into(),
+        (true, false) => {
             format!("Finish the implementation and output the complete code:\n{input}")
         }
-        (false, false) => format!("Instructions:\n{instructions}\n\nInput:\n{input}",),
+        (false, false) => bail!("No input code or instructions provided"),
     };
 
     llm_response("@preset/write-code", &prompt)
