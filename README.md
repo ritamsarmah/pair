@@ -7,7 +7,7 @@ An AI pair programmer for terminal-based workflows.
 **Question Answering**
 
 ```sh
-pair --ask 'Why is the sky blue'
+pair --answer 'Why is the sky blue'
 ```
 
 **Code Generation**

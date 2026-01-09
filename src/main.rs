@@ -10,10 +10,10 @@ use std::{
 
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/completions";
 
-const USAGE: &str = "Usage: pair <COMMAND> [ARGS]
+const USAGE: &str = "Usage: pair <FLAG> [ARGS]
 
-Commands:
-  -a, --ask <PROMPT>        Answer a general query
+Flags:
+  -a, --answer <PROMPT>     Answer a general query
   -c, --code <PROMPT>       Output code based on instructions
   -r, --review [<FILES>...] Review specified or modified files
   -h, --help                Show this help message and exit";
@@ -54,7 +54,7 @@ fn main() -> Result<()> {
     let input = args.get(2..).unwrap_or(&[]);
 
     let output = match flag.as_ref() {
-        "-a" | "--ask" => ask(&input.join(" ").trim())?,
+        "-a" | "--answer" => answer(&input.join(" ").trim())?,
         "-c" | "--code" => write_code(&input.join(" ").trim())?,
         "-r" | "--review" => review_code(input)?,
         "-h" | "--help" => USAGE.into(),
@@ -67,12 +67,12 @@ fn main() -> Result<()> {
 }
 
 /// Generate response for query.
-fn ask(query: &str) -> Result<String> {
+fn answer(query: &str) -> Result<String> {
     if query.is_empty() {
         bail!("No query provided")
     }
 
-    llm_response("@preset/ask-query", query)
+    llm_response("@preset/answer-query", query)
 }
 
 /// Write code based on instructions.
